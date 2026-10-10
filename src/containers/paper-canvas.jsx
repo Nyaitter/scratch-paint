@@ -9,8 +9,9 @@ import log from '../log/log';
 import {performSnapshot} from '../helper/undo';
 import {undoSnapshot, clearUndoState} from '../reducers/undo';
 import {isGroup, ungroupItems} from '../helper/group';
+import {getSelectedLeafItems, setItemSelection} from '../helper/selection';
 import {clearRaster, convertBackgroundGuideLayer, getRaster, setupLayers, updateTheme} from '../helper/layer';
-import {clearSelectedItems} from '../reducers/selected-items';
+import {clearSelectedItems, setSelectedItems as setSelectedItemsAction} from '../reducers/selected-items';
 import {
     ART_BOARD_WIDTH, ART_BOARD_HEIGHT, CENTER, MAX_WORKSPACE_BOUNDS,
     clampViewBounds, resetZoom, setWorkspaceBounds, zoomToFit, resizeCrosshair
@@ -70,9 +71,15 @@ class PaperCanvas extends React.Component {
     }
     componentWillReceiveProps (newProps) {
         if (this.props.imageId !== newProps.imageId) {
+            const sameCostume = this.props.collaborationCostumeId &&
+                this.props.collaborationCostumeId === newProps.collaborationCostumeId &&
+                this.props.imageFormat === 'svg' && newProps.imageFormat === 'svg';
+            const selectionPaths = sameCostume ?
+                (this.pendingSelectionPaths || (paper.view.getCollaborationPaintSelectionItemPaths ?
+                    paper.view.getCollaborationPaintSelectionItemPaths() : null)) : null;
             this.switchCostume(newProps.imageFormat, newProps.image,
                 newProps.rotationCenterX, newProps.rotationCenterY,
-                this.props.zoomLevelId, newProps.zoomLevelId);
+                this.props.zoomLevelId, newProps.zoomLevelId, selectionPaths);
         }
         if (this.props.format !== newProps.format) {
             this.recalibrateSize();
@@ -101,7 +108,9 @@ class PaperCanvas extends React.Component {
             this.queuedImageToLoad = null;
         }
     }
-    switchCostume (format, image, rotationCenterX, rotationCenterY, oldZoomLevelId, newZoomLevelId) {
+    switchCostume (format, image, rotationCenterX, rotationCenterY, oldZoomLevelId, newZoomLevelId,
+        selectionPaths = null) {
+        this.pendingSelectionPaths = Array.isArray(selectionPaths) && selectionPaths.length ? selectionPaths : null;
         if (oldZoomLevelId && oldZoomLevelId !== newZoomLevelId) {
             this.props.saveZoomLevel();
         }
@@ -135,6 +144,7 @@ class PaperCanvas extends React.Component {
         this.clearQueuedImport();
 
         if (!image) {
+            this.pendingSelectionPaths = null;
             this.clearPaperCanvas();
             this.props.changeFormat(Formats.VECTOR_SKIP_CONVERT);
             performSnapshot(this.props.undoSnapshot, Formats.VECTOR_SKIP_CONVERT);
@@ -177,12 +187,14 @@ class PaperCanvas extends React.Component {
                 this.maybeZoomToFit(true /* isBitmap */);
                 performSnapshot(this.props.undoSnapshot, Formats.BITMAP_SKIP_CONVERT);
                 this.recalibrateSize();
+                this.restoreCollaborationSelection();
             };
             imgElement.src = image;
         } else if (format === 'svg') {
             this.props.changeFormat(Formats.VECTOR_SKIP_CONVERT);
             this.importSvg(image, rotationCenterX, rotationCenterY);
         } else {
+            this.pendingSelectionPaths = null;
             this.clearPaperCanvas();
             log.error(`Didn't recognize format: ${format}. Use 'jpg', 'png' or 'svg'.`);
             this.props.changeFormat(Formats.VECTOR_SKIP_CONVERT);
@@ -236,6 +248,7 @@ class PaperCanvas extends React.Component {
             insert: false,
             onLoad: function (item) {
                 if (!item) {
+                    paperCanvas.pendingSelectionPaths = null;
                     log.error('SVG import failed:');
                     log.info(svg);
                     setImportingImage(false);
@@ -317,6 +330,32 @@ class PaperCanvas extends React.Component {
 
         performSnapshot(this.props.undoSnapshot, Formats.VECTOR_SKIP_CONVERT);
         this.maybeZoomToFit();
+        this.restoreCollaborationSelection();
+    }
+    restoreCollaborationSelection () {
+        const paths = this.pendingSelectionPaths;
+        if (!Array.isArray(paths) || paths.length === 0) return;
+        this.pendingSelectionPaths = null;
+        const view = paper.view;
+        const project = paper.project;
+        if (!view.getCollaborationPaintItemAtPath || !project) return;
+        const wasApplyingPreview = project._nyaitterApplyingCollaborationPreview;
+        let restored = 0;
+        project._nyaitterApplyingCollaborationPreview = true;
+        try {
+            paths.forEach(path => {
+                const item = view.getCollaborationPaintItemAtPath(path);
+                if (!item || item.guide || item._nyaitterRemotePreview || item.data?.isHelperItem) return;
+                setItemSelection(item, true, true);
+                restored++;
+            });
+        } finally {
+            project._nyaitterApplyingCollaborationPreview = wasApplyingPreview;
+        }
+        if (restored) {
+            this.props.setSelectedItems();
+            if (view.notifyCollaborationPaintSelectionChange) view.notifyCollaborationPaintSelectionChange();
+        }
     }
     onViewResize () {
         setWorkspaceBounds(true /* clipEmpty */);
@@ -376,9 +415,11 @@ PaperCanvas.propTypes = {
     ]),
     imageFormat: PropTypes.string, // The incoming image's data format, used during import. The user could switch this.
     imageId: PropTypes.string,
+    collaborationCostumeId: PropTypes.string,
     rotationCenterX: PropTypes.number,
     rotationCenterY: PropTypes.number,
     saveZoomLevel: PropTypes.func.isRequired,
+    setSelectedItems: PropTypes.func.isRequired,
     setZoomLevelId: PropTypes.func.isRequired,
     theme: PropTypes.string,
     undoSnapshot: PropTypes.func.isRequired,
@@ -403,6 +444,9 @@ const mapDispatchToProps = dispatch => ({
     },
     clearSelectedItems: () => {
         dispatch(clearSelectedItems());
+    },
+    setSelectedItems: () => {
+        dispatch(setSelectedItemsAction(getSelectedLeafItems(), false));
     },
     clearHoveredItem: () => {
         dispatch(clearHoveredItem());

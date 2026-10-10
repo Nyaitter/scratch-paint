@@ -212,6 +212,7 @@ const PaintEditorComponent = props => (
                         image={props.image}
                         imageFormat={props.imageFormat}
                         imageId={props.imageId}
+                        collaborationCostumeId={props.collaborationCostumeId}
                         rotationCenterX={props.rotationCenterX}
                         rotationCenterY={props.rotationCenterY}
                         theme={props.theme}
@@ -335,6 +336,7 @@ PaintEditorComponent.propTypes = {
     ]),
     imageFormat: PropTypes.string,
     imageId: PropTypes.string,
+    collaborationCostumeId: PropTypes.string,
     intl: intlShape,
     isEyeDropping: PropTypes.bool,
     name: PropTypes.string,

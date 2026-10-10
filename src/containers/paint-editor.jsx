@@ -336,6 +336,7 @@ class PaintEditor extends React.Component {
                 image={this.props.image}
                 imageFormat={this.props.imageFormat}
                 imageId={this.props.imageId}
+                collaborationCostumeId={this.props.collaborationCostumeId}
                 isEyeDropping={this.props.isEyeDropping}
                 name={this.props.name}
                 rotationCenterX={this.props.rotationCenterX}
@@ -383,6 +384,7 @@ PaintEditor.propTypes = {
     ]),
     imageFormat: PropTypes.string, // The incoming image's data format, used during import
     imageId: PropTypes.string,
+    collaborationCostumeId: PropTypes.string,
     isEyeDropping: PropTypes.bool,
     mode: PropTypes.oneOf(Object.keys(Modes)).isRequired,
     name: PropTypes.string,

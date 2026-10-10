@@ -17,10 +17,10 @@
   },
   "author": "Massachusetts Institute of Technology",
   "license": "GPL-3.0",
-  "homepage": "https://github.com/LLK/scratch-paint#readme",
+  "homepage": "https://github.com/Nyaitter/scratch-paint",
   "repository": {
     "type": "git",
-    "url": "https://github.com/LLK/scratch-paint.git"
+    "url": "https://github.com/Nyaitter/scratch-paint.git"
   },
   "dependencies": {
     "@turbowarp/nanolog": "^0.2.0",
